@@ -137,7 +137,7 @@ static int post_key_event(uiohook_event * const event, CGEventSourceRef src) {
     return UIOHOOK_SUCCESS;
 }
 
-static int post_mouse_event(uiohook_event * const event, CGEventSourceRef src) {
+static int post_mouse_event(uiohook_event * const event, CGEventSourceRef src, bool move_mouse) {
     CGEventType type = kCGEventNull;
     CGMouseButton button = 0;
 
@@ -199,16 +199,28 @@ static int post_mouse_event(uiohook_event * const event, CGEventSourceRef src) {
                     __FUNCTION__, __LINE__, event->type);
             return UIOHOOK_FAILURE;
     }
+    CGEventRef cg_event;
+    if (move_mouse) {
+        cg_event = CGEventCreateMouseEvent(
+                src,
+                type,
+                CGPointMake(
+                        (CGFloat) event->data.mouse.x,
+                        (CGFloat) event->data.mouse.y
+                ),
+                button
+        );
+    } else {
+        CGEventRef null_event = CGEventCreate(NULL);
+        cg_event = CGEventCreateMouseEvent(
+                src,
+                type,
+                CGEventGetLocation(null_event),
+                button
+        );
+        CFRelease(null_event);
+    }
 
-    CGEventRef cg_event = CGEventCreateMouseEvent(
-        src,
-        type,
-        CGPointMake(
-            (CGFloat) event->data.mouse.x,
-            (CGFloat) event->data.mouse.y
-        ),
-        button
-    );
 
     if (cg_event == NULL) {
         logger(LOG_LEVEL_ERROR, "%s [%u]: CGEventCreateMouseEvent failed!\n",
@@ -256,11 +268,11 @@ static int post_mouse_wheel_event(uiohook_event * const event, CGEventSourceRef 
     return UIOHOOK_SUCCESS;
 }
 
-UIOHOOK_API int hook_post_event(uiohook_event * const event) {
+UIOHOOK_API int do_hook_post_event(uiohook_event * const event, bool move_mouse) {
     CGEventSourceRef src = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
     if (src == NULL) {
         logger(LOG_LEVEL_ERROR, "%s [%u]: CGEventSourceCreate failed!\n",
-                __FUNCTION__, __LINE__);
+               __FUNCTION__, __LINE__);
         return UIOHOOK_ERROR_OUT_OF_MEMORY;
     }
 
@@ -276,7 +288,7 @@ UIOHOOK_API int hook_post_event(uiohook_event * const event) {
 
         case EVENT_MOUSE_MOVED:
         case EVENT_MOUSE_DRAGGED:
-            status = post_mouse_event(event, src);
+            status = post_mouse_event(event, src, move_mouse);
             break;
 
         case EVENT_MOUSE_WHEEL:
@@ -291,11 +303,19 @@ UIOHOOK_API int hook_post_event(uiohook_event * const event) {
 
         default:
             logger(LOG_LEVEL_DEBUG, "%s [%u]: Ignoring post event: %#X.\n",
-                    __FUNCTION__, __LINE__, event->type);
+                   __FUNCTION__, __LINE__, event->type);
             status = UIOHOOK_FAILURE;
     }
 
     CFRelease(src);
 
     return status;
+}
+
+UIOHOOK_API int hook_post_event(uiohook_event * const event) {
+    return do_hook_post_event(event, true);
+}
+
+UIOHOOK_API int hook_post_event_at_current_mouse_position(uiohook_event * const event) {
+    return do_hook_post_event(event, false);
 }
