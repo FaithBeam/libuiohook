@@ -423,6 +423,13 @@ extern "C" {
     // Send a virtual event back to the system.
     UIOHOOK_API int hook_post_event(uiohook_event * const event);
 
+    // I haven't found something to just send a mouse event without a coordinate for
+    // macos. This is Windows and Linux only for now.
+#if defined _WIN32 || defined __linux__
+    // Send a virtual event back to the system at the current mouse cursor position
+    UIOHOOK_API int hook_post_event_dont_move_mouse(uiohook_event * const event);
+#endif
+
     // Insert the event hook.
     UIOHOOK_API int hook_run();
 

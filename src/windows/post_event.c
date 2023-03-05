@@ -110,7 +110,7 @@ static int map_keyboard_event(uiohook_event * const event, INPUT * const input) 
     return UIOHOOK_SUCCESS;
 }
 
-static int map_mouse_event(uiohook_event * const event, INPUT * const input) {
+static int map_mouse_event(uiohook_event * const event, INPUT * const input, bool move_mouse) {
     // FIXME implement multiple monitor support
     uint16_t screen_width  = GetSystemMetrics(SM_CXSCREEN);
     uint16_t screen_height = GetSystemMetrics(SM_CYSCREEN);
@@ -146,11 +146,14 @@ static int map_mouse_event(uiohook_event * const event, INPUT * const input) {
                 }
             }
 
-            // We need to move the mouse to the correct location prior to clicking.
-            event->type = EVENT_MOUSE_MOVED;
-            // TODO Remember to check the status here.
-            hook_post_event(event);
-            event->type = EVENT_MOUSE_PRESSED;
+            if (move_mouse) {
+                // We need to move the mouse to the correct location prior to clicking.
+                event->type = EVENT_MOUSE_MOVED;
+                // TODO Remember to check the status here.
+                hook_post_event(event);
+                event->type = EVENT_MOUSE_PRESSED;
+            }
+
             break;
 
         case EVENT_MOUSE_RELEASED:
@@ -175,11 +178,14 @@ static int map_mouse_event(uiohook_event * const event, INPUT * const input) {
                 }
             }
 
-            // We need to move the mouse to the correct location prior to clicking.
-            event->type = EVENT_MOUSE_MOVED;
-            // TODO Remember to check the status here.
-            hook_post_event(event);
-            event->type = EVENT_MOUSE_PRESSED;
+            if (move_mouse) {
+                // We need to move the mouse to the correct location prior to clicking.
+                event->type = EVENT_MOUSE_MOVED;
+                // TODO Remember to check the status here.
+                hook_post_event(event);
+                event->type = EVENT_MOUSE_PRESSED;
+            }
+
             break;
 
         case EVENT_MOUSE_WHEEL:
@@ -203,6 +209,14 @@ static int map_mouse_event(uiohook_event * const event, INPUT * const input) {
     return UIOHOOK_SUCCESS;
 }
 
+static int map_mouse_event_move_mouse(uiohook_event * const event, INPUT * const input) {
+    return map_mouse_event(event, input, true);
+}
+
+static int map_mouse_event_dont_move_mouse(uiohook_event * const event, INPUT * const input) {
+    return map_mouse_event(event, input, false);
+}
+
 UIOHOOK_API int hook_post_event(uiohook_event * const event) {
     INPUT *input = (INPUT *) calloc(1, sizeof(INPUT))   ;
     if (input == NULL) {
@@ -223,7 +237,7 @@ UIOHOOK_API int hook_post_event(uiohook_event * const event) {
         case EVENT_MOUSE_WHEEL:
         case EVENT_MOUSE_MOVED:
         case EVENT_MOUSE_DRAGGED:
-            status = map_mouse_event(event, input);
+            status = map_mouse_event(event, input, true);
             break;
 
         case EVENT_KEY_TYPED:
@@ -241,6 +255,52 @@ UIOHOOK_API int hook_post_event(uiohook_event * const event) {
     if (status == UIOHOOK_SUCCESS && !SendInput(1, input, sizeof(INPUT))) {
         logger(LOG_LEVEL_ERROR, "%s [%u]: SendInput() failed! (%#lX)\n",
                 __FUNCTION__, __LINE__, (unsigned long) GetLastError());
+        status = UIOHOOK_FAILURE;
+    }
+
+    free(input);
+
+    return status;
+}
+
+UIOHOOK_API int hook_post_event_dont_move_mouse(uiohook_event * const event) {
+    INPUT *input = (INPUT *) calloc(1, sizeof(INPUT))   ;
+    if (input == NULL) {
+        logger(LOG_LEVEL_ERROR, "%s [%u]: failed to allocate memory: calloc!\n",
+               __FUNCTION__, __LINE__);
+        return UIOHOOK_ERROR_OUT_OF_MEMORY;
+    }
+
+    int status = UIOHOOK_FAILURE;
+    switch (event->type) {
+        case EVENT_KEY_PRESSED:
+        case EVENT_KEY_RELEASED:
+            status = map_keyboard_event(event, input);
+            break;
+
+        case EVENT_MOUSE_PRESSED:
+        case EVENT_MOUSE_RELEASED:
+        case EVENT_MOUSE_WHEEL:
+        case EVENT_MOUSE_MOVED:
+        case EVENT_MOUSE_DRAGGED:
+            status = map_mouse_event(event, input, false);
+            break;
+
+        case EVENT_KEY_TYPED:
+        case EVENT_MOUSE_CLICKED:
+
+        case EVENT_HOOK_ENABLED:
+        case EVENT_HOOK_DISABLED:
+
+        default:
+            logger(LOG_LEVEL_DEBUG, "%s [%u]: Ignoring post event: %#X.\n",
+                   __FUNCTION__, __LINE__, event->type);
+            status = UIOHOOK_FAILURE;
+    }
+
+    if (status == UIOHOOK_SUCCESS && !SendInput(1, input, sizeof(INPUT))) {
+        logger(LOG_LEVEL_ERROR, "%s [%u]: SendInput() failed! (%#lX)\n",
+               __FUNCTION__, __LINE__, (unsigned long) GetLastError());
         status = UIOHOOK_FAILURE;
     }
 
