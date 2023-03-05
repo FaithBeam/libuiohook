@@ -56,7 +56,7 @@ static int post_key_event(uiohook_event * const event) {
     return UIOHOOK_SUCCESS;
 }
 
-static int post_mouse_button_event(uiohook_event * const event) {
+static int post_mouse_button_event(uiohook_event * const event, bool move_mouse) {
     XButtonEvent btn_event = {
         .serial = 0,
         .send_event = False,
@@ -78,8 +78,10 @@ static int post_mouse_button_event(uiohook_event * const event) {
         .same_screen = True
     };
 
-    // Move the pointer to the specified position.
-    XTestFakeMotionEvent(btn_event.display, -1, btn_event.x, btn_event.y, 0);
+    if (move_mouse) {
+        // Move the pointer to the specified position.
+        XTestFakeMotionEvent(btn_event.display, -1, btn_event.x, btn_event.y, 0);
+    }
 
     int status = UIOHOOK_FAILURE;
     switch (event->type) {
@@ -114,6 +116,14 @@ static int post_mouse_button_event(uiohook_event * const event) {
     }
 
     return status;
+}
+
+static int post_mouse_button_event_move_mouse(uiohook_event * const event) {
+    return post_mouse_button_event(event, true);
+}
+
+static int post_mouse_button_event_dont_move_mouse(uiohook_event * const event) {
+    return post_mouse_button_event(event, false);
 }
 
 static int post_mouse_wheel_event(uiohook_event * const event) {
@@ -184,7 +194,7 @@ UIOHOOK_API int hook_post_event(uiohook_event * const event) {
 
         case EVENT_MOUSE_PRESSED:
         case EVENT_MOUSE_RELEASED:
-            status = post_mouse_button_event(event);
+            status = post_mouse_button_event_move_mouse(event);
             break;
 
         case EVENT_MOUSE_WHEEL:
@@ -205,6 +215,55 @@ UIOHOOK_API int hook_post_event(uiohook_event * const event) {
         default:
             logger(LOG_LEVEL_WARN, "%s [%u]: Ignoring post event type %#X\n",
                     __FUNCTION__, __LINE__, event->type);
+            status = UIOHOOK_FAILURE;
+    }
+
+    // Don't forget to flush!
+    XSync(helper_disp, True);
+    XUnlockDisplay(helper_disp);
+
+    return status;
+}
+
+UIOHOOK_API int hook_post_event_dont_move_mouse(uiohook_event * const event) {
+    if (helper_disp == NULL) {
+        logger(LOG_LEVEL_ERROR, "%s [%u]: XDisplay helper_disp is unavailable!\n",
+               __FUNCTION__, __LINE__);
+        return UIOHOOK_ERROR_X_OPEN_DISPLAY;
+    }
+
+    XLockDisplay(helper_disp);
+
+    int status = UIOHOOK_FAILURE;
+    switch (event->type) {
+        case EVENT_KEY_PRESSED:
+        case EVENT_KEY_RELEASED:
+            status = post_key_event(event);
+            break;
+
+        case EVENT_MOUSE_PRESSED:
+        case EVENT_MOUSE_RELEASED:
+            status = post_mouse_button_event_dont_move_mouse(event);
+            break;
+
+        case EVENT_MOUSE_WHEEL:
+            status = post_mouse_wheel_event(event);
+            break;
+
+        case EVENT_MOUSE_MOVED:
+        case EVENT_MOUSE_DRAGGED:
+            status = post_mouse_motion_event(event);
+            break;
+
+        case EVENT_KEY_TYPED:
+        case EVENT_MOUSE_CLICKED:
+
+        case EVENT_HOOK_ENABLED:
+        case EVENT_HOOK_DISABLED:
+
+        default:
+            logger(LOG_LEVEL_WARN, "%s [%u]: Ignoring post event type %#X\n",
+                   __FUNCTION__, __LINE__, event->type);
             status = UIOHOOK_FAILURE;
     }
 

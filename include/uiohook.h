@@ -424,6 +424,9 @@ extern "C" {
     // Send a virtual event back to the system.
     UIOHOOK_API int hook_post_event(uiohook_event * const event);
 
+    // Send a virtual event back to the system at the current mouse cursor position
+    UIOHOOK_API int hook_post_event_at_current_mouse_position(uiohook_event * const event);
+
     // Insert the event hook.
     UIOHOOK_API int hook_run();
 
