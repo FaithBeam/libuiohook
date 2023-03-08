@@ -136,20 +136,22 @@ static int map_keyboard_event(uiohook_event * const event, INPUT * const input) 
 }
 
 static int map_mouse_event(uiohook_event * const event, INPUT * const input, bool move_mouse) {
-    uint16_t screen_width  = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-    uint16_t screen_height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-
     input->type = INPUT_MOUSE;
     input->mi.mouseData = 0;
     input->mi.dwExtraInfo = 0;
     input->mi.time = 0; // GetSystemTime();
 
-    LARGESTNEGATIVECOORDINATES lnc = get_largest_negative_coordinates();
+    if (move_mouse) {
+        uint16_t screen_width  = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        uint16_t screen_height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 
-    normalized_coordinate nc = normalize_coordinates(event->data.mouse.x, event->data.mouse.y, screen_width, screen_height, lnc);
+        LARGESTNEGATIVECOORDINATES lnc = get_largest_negative_coordinates();
 
-    input->mi.dx = nc.x;
-    input->mi.dy = nc.y;
+        normalized_coordinate nc = normalize_coordinates(event->data.mouse.x, event->data.mouse.y, screen_width, screen_height, lnc);
+
+        input->mi.dx = nc.x;
+        input->mi.dy = nc.y;
+    }
 
     switch (event->type) {
         case EVENT_MOUSE_PRESSED:
